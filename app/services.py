@@ -9,6 +9,7 @@ from typing import Optional
 
 import msal
 import jwt
+from jwt.exceptions import PyJWTError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
@@ -39,7 +40,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def decode_access_token(token: str) -> Optional[dict]:
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except Exception as e:
+    except PyJWTError as e:
         logger.error(f"Error decoding token: {e}")
         return None
 
@@ -129,7 +130,7 @@ def acquire_token_by_code(code: str) -> Optional[dict]:
             logger.error(f"Entra ID token error: {result.get('error_description', result.get('error'))}")
             return None
         return result
-    except Exception as e:
+    except (ValueError, KeyError, OSError) as e:
         logger.error(f"Error acquiring token by code: {e}")
         return None
 
@@ -186,7 +187,7 @@ def get_or_create_entra_user(db: Session, token_result: dict) -> Optional[User]:
         db.refresh(user)
         return user
 
-    except Exception as e:
+    except (ValueError, KeyError, OSError) as e:
         logger.error(f"Error creating Entra ID user: {e}")
         db.rollback()
         return None
