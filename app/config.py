@@ -8,11 +8,11 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     APP_NAME: str = "NutriAI Auth Service"
-    SECRET_KEY: str = "change-this-secret-key-in-production"
+    SECRET_KEY: str = "change-this-secret-key-in-production-32bytes"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    DATABASE_URL: str = "postgresql://nutriai_user:nutriai_password@localhost:5432/nutriai"
+    DATABASE_URL: str = "postgresql://nutriai_user@localhost:5432/nutriai"
 
     ENTRA_CLIENT_ID: str = ""
     ENTRA_CLIENT_SECRET: str = ""
