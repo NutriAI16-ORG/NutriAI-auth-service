@@ -3,6 +3,7 @@ NutriAI Auth Service - Comprehensive Tests
 """
 
 import pytest
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 def test_health_endpoint(client):
@@ -124,3 +125,158 @@ class TestMeRoute:
         data = response.json()
         assert data["email"] == test_user.email
         assert data["id"] == str(test_user.id)
+
+
+class TestForgotPassword:
+    def test_forgot_password(self, client):
+        response = client.get("/auth/forgot-password")
+        assert response.status_code == 200
+        assert "Password reset functionality" in response.json()["message"]
+
+
+class TestMicrosoftSSO:
+    @patch("app.routes.get_auth_url", return_value="https://login.microsoft.com/auth")
+    def test_microsoft_login_success(self, mock_get_url, client):
+        response = client.get("/auth/microsoft")
+        assert response.status_code == 200
+        assert response.json()["auth_url"] == "https://login.microsoft.com/auth"
+
+    @patch("app.routes.get_auth_url", side_effect=ValueError("SSO error"))
+    def test_microsoft_login_failure(self, mock_get_url, client):
+        response = client.get("/auth/microsoft")
+        assert response.status_code == 500
+
+    def test_callback_with_error(self, client):
+        response = client.get("/auth/callback?error=access_denied")
+        assert response.status_code == 400
+        assert "SSO authentication denied" in response.json()["error"]
+
+    def test_callback_missing_code(self, client):
+        response = client.get("/auth/callback")
+        assert response.status_code == 400
+        assert "No authorization code" in response.json()["error"]
+
+    @patch("app.routes.acquire_token_by_code", return_value=None)
+    def test_callback_token_fail(self, mock_acquire, client):
+        response = client.get("/auth/callback?code=123")
+        assert response.status_code == 400
+        assert "Token acquisition failed" in response.json()["error"]
+
+    @patch("app.routes.acquire_token_by_code", return_value={"id_token": "token"})
+    @patch("app.routes.get_or_create_entra_user", return_value=None)
+    def test_callback_user_creation_fail(self, mock_get_user, mock_acquire, client):
+        response = client.get("/auth/callback?code=123")
+        assert response.status_code == 400
+        assert "User creation failed" in response.json()["error"]
+
+    @patch("app.routes.acquire_token_by_code", return_value={"id_token": "token"})
+    @patch("app.routes.get_or_create_entra_user")
+    def test_callback_success(self, mock_get_user, mock_acquire, client, test_user):
+        mock_get_user.return_value = test_user
+        response = client.get("/auth/callback?code=123")
+        assert response.status_code == 200
+        assert "SSO login successful" in response.json()["message"]
+        assert "access_token" in response.cookies
+
+    @patch("app.routes.acquire_token_by_code", side_effect=OSError("Network failure"))
+    def test_callback_exception(self, mock_acquire, client):
+        response = client.get("/auth/callback?code=123")
+        assert response.status_code == 500
+
+
+class TestAuthServices:
+    def test_decode_access_token_invalid(self):
+        from app.services import decode_access_token
+        assert decode_access_token("invalid-jwt") is None
+
+    def test_authenticate_user_wrong_auth_type(self, db_session, test_user):
+        from app.services import authenticate_user
+        test_user.auth_type = "entra_id"
+        db_session.commit()
+        assert authenticate_user(db_session, test_user.email, "TestPassword123!") is None
+
+    def test_authenticate_user_inactive(self, db_session, test_user):
+        from app.services import authenticate_user
+        test_user.is_active = False
+        db_session.commit()
+        assert authenticate_user(db_session, test_user.email, "TestPassword123!") is None
+
+    @patch("app.services.msal.ConfidentialClientApplication")
+    def test_msal_helpers(self, mock_msal_class):
+        from app.services import get_msal_app, get_auth_url, acquire_token_by_code
+        mock_app = MagicMock()
+        mock_msal_class.return_value = mock_app
+        
+        # Test get_msal_app
+        app_inst = get_msal_app()
+        assert app_inst == mock_app
+
+        # Test get_auth_url
+        mock_app.get_authorization_request_url.return_value = "https://login.microsoft.com"
+        assert get_auth_url() == "https://login.microsoft.com"
+
+        # Test acquire_token_by_code success
+        mock_app.acquire_token_by_authorization_code.return_value = {"access_token": "sso-token"}
+        assert acquire_token_by_code("code123") == {"access_token": "sso-token"}
+
+        # Test acquire_token_by_code error in result
+        mock_app.acquire_token_by_authorization_code.return_value = {"error": "invalid_grant", "error_description": "bad code"}
+        assert acquire_token_by_code("code123") is None
+
+        # Test acquire_token_by_code exception
+        mock_app.acquire_token_by_authorization_code.side_effect = ValueError("MSAL Err")
+        assert acquire_token_by_code("code123") is None
+
+    def test_get_or_create_entra_user_missing_claims(self, db_session):
+        from app.services import get_or_create_entra_user
+        assert get_or_create_entra_user(db_session, {}) is None
+
+    def test_get_or_create_entra_user_existing_oid(self, db_session, test_user):
+        from app.services import get_or_create_entra_user
+        test_user.entra_oid = "oid-123"
+        test_user.auth_type = "entra_id"
+        db_session.commit()
+
+        token_result = {"id_token_claims": {"oid": "oid-123", "preferred_username": test_user.email}}
+        user = get_or_create_entra_user(db_session, token_result)
+        assert user.id == test_user.id
+
+    def test_get_or_create_entra_user_existing_email(self, db_session, test_user):
+        from app.services import get_or_create_entra_user
+        test_user.entra_oid = None
+        test_user.auth_type = "local"
+        db_session.commit()
+
+        token_result = {"id_token_claims": {"oid": "oid-456", "preferred_username": test_user.email}}
+        user = get_or_create_entra_user(db_session, token_result)
+        assert user.id == test_user.id
+        assert user.entra_oid == "oid-456"
+        assert user.auth_type == "entra_id"
+
+    def test_get_or_create_entra_user_new_user(self, db_session):
+        from app.services import get_or_create_entra_user
+        token_result = {
+            "id_token_claims": {
+                "oid": "oid-999",
+                "preferred_username": "new_sso@example.com",
+                "name": "SSO New User"
+            }
+        }
+        user = get_or_create_entra_user(db_session, token_result)
+        assert user is not None
+        assert user.email == "new_sso@example.com"
+        assert user.username == "new_sso"
+        assert user.auth_type == "entra_id"
+
+        # Check duplicate username handling
+        token_result_dup = {
+            "id_token_claims": {
+                "oid": "oid-888",
+                "preferred_username": "new_sso@another.com",
+                "name": "SSO Duplicate Username"
+            }
+        }
+        user_dup = get_or_create_entra_user(db_session, token_result_dup)
+        assert user_dup is not None
+        assert user_dup.username == "new_sso1"
+
