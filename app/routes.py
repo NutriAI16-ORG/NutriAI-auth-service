@@ -8,6 +8,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
 from app.database import get_db
@@ -105,7 +106,7 @@ async def register(payload: UserRegister, db: Session = Depends(get_db)):
         )
         return response
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Registration error: {e}")
         return JSONResponse(
             status_code=500,
@@ -123,7 +124,7 @@ async def microsoft_login():
     try:
         auth_url = get_auth_url()
         return JSONResponse(content={"auth_url": auth_url})
-    except Exception as e:
+    except (ValueError, OSError) as e:
         logger.error(f"Error initiating Microsoft login: {e}")
         return JSONResponse(status_code=500, content={"error": "Failed to initiate SSO"})
 
@@ -169,7 +170,7 @@ async def microsoft_callback(
         )
         return response
 
-    except Exception as e:
+    except (SQLAlchemyError, ValueError, OSError) as e:
         logger.error(f"Error in Microsoft callback: {e}")
         return JSONResponse(status_code=500, content={"error": "SSO callback failed"})
 
