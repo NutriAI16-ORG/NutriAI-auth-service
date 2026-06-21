@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from config import get_settings
-from database import get_db
-from models import User
-from schemas import UserLogin, UserRegister, UserResponse
-from services import (
+from app.config import get_settings
+from app.database import get_db
+from app.models import User
+from app.schemas import UserLogin, UserRegister, UserResponse
+from app.services import (
     authenticate_user,
     create_user,
     create_access_token,

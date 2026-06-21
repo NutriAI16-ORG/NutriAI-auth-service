@@ -12,8 +12,8 @@ from jose import jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from config import get_settings
-from models import User, PatientProfile
+from app.config import get_settings
+from app.models import User, PatientProfile
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

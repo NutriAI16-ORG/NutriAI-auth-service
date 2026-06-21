@@ -15,10 +15,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database import Base, get_db
-from main import app
-from models import User, PatientProfile, FoodAllergy
-from services import hash_password, create_access_token
+from app.database import Base, get_db
+from app.main import app
+from app.models import User, PatientProfile, FoodAllergy
+from app.services import hash_password, create_access_token
 
 TEST_DATABASE_URL = "sqlite:///./test.db"
 engine = create_engine(
