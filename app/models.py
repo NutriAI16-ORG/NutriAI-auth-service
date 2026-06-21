@@ -9,16 +9,49 @@ from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, Enum, JSON
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import TypeDecorator, CHAR
+from sqlalchemy.dialects.postgresql import UUID as pgUUID
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+class GUID(TypeDecorator):
+    """Platform-independent GUID type.
+    Uses PostgreSQL's UUID type, otherwise uses CHAR(36), storing as stringified uuid.
+    """
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(pgUUID(as_uuid=True))
+        else:
+            return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if dialect.name == 'postgresql':
+            if isinstance(value, uuid.UUID):
+                return value
+            return uuid.UUID(value)
+        else:
+            if isinstance(value, uuid.UUID):
+                return str(value)
+            return str(uuid.UUID(value))
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if isinstance(value, uuid.UUID):
+            return value
+        return uuid.UUID(value)
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=True)
@@ -48,8 +81,8 @@ class User(Base):
 class PatientProfile(Base):
     __tablename__ = "patient_profiles"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     medical_conditions = Column(JSON, default=list)
     dietary_preferences = Column(JSON, default=list)
     blood_type = Column(String(10), nullable=True)
@@ -61,8 +94,8 @@ class PatientProfile(Base):
 class FoodAllergy(Base):
     __tablename__ = "food_allergies"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     allergen_name = Column(String(255), nullable=False)
     severity = Column(
         Enum("mild", "moderate", "severe", name="severity_enum", create_type=False),
