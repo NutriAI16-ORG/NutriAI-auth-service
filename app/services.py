@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import msal
-from jose import jwt
+import jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 

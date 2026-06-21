@@ -1,6 +1,6 @@
 fastapi==0.138.0
 uvicorn[standard]==0.34.0
-python-jose[cryptography]==3.4.0
+PyJWT[crypto]==2.13.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.1
 msal==1.31.1
@@ -10,4 +10,3 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 python-multipart==0.0.32
 python-dotenv==1.0.1
-pyasn1==0.6.3
