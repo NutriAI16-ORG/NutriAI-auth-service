@@ -53,7 +53,6 @@ async def login(payload: UserLogin, db: Session = Depends(get_db)):
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
-        secure=True,
     )
     return response
 
@@ -104,7 +103,6 @@ async def register(payload: UserRegister, db: Session = Depends(get_db)):
             httponly=True,
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             samesite="lax",
-            secure=True,
         )
         return response
 
@@ -169,7 +167,6 @@ async def microsoft_callback(
             httponly=True,
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             samesite="lax",
-            secure=True,
         )
         return response
 
