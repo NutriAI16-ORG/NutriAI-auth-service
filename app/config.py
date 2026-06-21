@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    DATABASE_URL: str = "sqlite:///./test.db"
+    DATABASE_URL: str = "postgresql://nutriai_user@localhost:5432/nutriai"
 
     ENTRA_CLIENT_ID: str = ""
     ENTRA_CLIENT_SECRET: str = ""
