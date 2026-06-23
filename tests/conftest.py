@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 # Override env vars BEFORE importing any app modules.
 os.environ["DATABASE_URL"] = "sqlite:///./test.db"
-os.environ["SECRET_KEY"] = "test-secret-key-for-unit-tests-32bytes"
+os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-unit-tests-32bytes"
 os.environ["ALGORITHM"] = "HS256"
 os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
 

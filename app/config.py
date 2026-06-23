@@ -8,7 +8,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     APP_NAME: str = "NutriAI Auth Service"
-    SECRET_KEY: str = "change-this-secret-key-in-production-32bytes"
+    JWT_SECRET_KEY: str = "change-this-secret-key-in-production-32bytes"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
