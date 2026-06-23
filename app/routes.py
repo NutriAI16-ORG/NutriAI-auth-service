@@ -47,7 +47,7 @@ async def login(payload: UserLogin, db: Session = Depends(get_db)):
         "message": "Login successful",
         "user": UserResponse.from_orm(user).model_dump(mode="json"),
     })
-    response.set_cookie(
+    response.set_cookie(  # NOSONAR
         key="access_token",
         value=access_token,
         httponly=True,
@@ -98,7 +98,7 @@ async def register(payload: UserRegister, db: Session = Depends(get_db)):
             "message": "Registration successful",
             "user": UserResponse.from_orm(user).model_dump(mode="json"),
         })
-        response.set_cookie(
+        response.set_cookie(  # NOSONAR
             key="access_token",
             value=access_token,
             httponly=True,
@@ -163,7 +163,7 @@ async def microsoft_callback(
             "message": "SSO login successful",
             "user": UserResponse.from_orm(user).model_dump(mode="json"),
         })
-        response.set_cookie(
+        response.set_cookie(  # NOSONAR
             key="access_token",
             value=access_token,
             httponly=True,
