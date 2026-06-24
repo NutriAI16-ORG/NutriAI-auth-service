@@ -137,7 +137,7 @@ def acquire_token_by_code(code: str) -> Optional[dict]:
         return None
 
 
-def get_or_create_entra_user(db: Session, token_result: dict) -> Optional[User]:
+def get_or_create_entra_user(db: Session, token_result: dict) -> tuple:
     try:
         id_token_claims = token_result.get("id_token_claims", {})
         oid = id_token_claims.get("oid")
@@ -146,11 +146,11 @@ def get_or_create_entra_user(db: Session, token_result: dict) -> Optional[User]:
 
         if not oid or not email:
             logger.error("Missing oid or email in Entra ID claims")
-            return None
+            return None, False
 
         user = db.query(User).filter(User.entra_oid == oid).first()
         if user:
-            return user
+            return user, False
 
         user = db.query(User).filter(User.email == email).first()
         if user:
@@ -158,7 +158,7 @@ def get_or_create_entra_user(db: Session, token_result: dict) -> Optional[User]:
             user.auth_type = "entra_id"
             db.commit()
             db.refresh(user)
-            return user
+            return user, False
 
         username = email.split("@")[0]
         base_username = username
@@ -187,9 +187,10 @@ def get_or_create_entra_user(db: Session, token_result: dict) -> Optional[User]:
         db.add(profile)
         db.commit()
         db.refresh(user)
-        return user
+        return user, True
 
     except (ValueError, KeyError, OSError) as e:
         logger.error(f"Error creating Entra ID user: {e}")
         db.rollback()
-        return None
+        return None, False
+

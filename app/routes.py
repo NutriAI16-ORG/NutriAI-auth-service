@@ -159,7 +159,7 @@ async def microsoft_callback(
         if not token_result:
             return RedirectResponse(url=f"{frontend_login}?error=token_failed")
 
-        user = get_or_create_entra_user(db, token_result)
+        user, is_new_user = get_or_create_entra_user(db, token_result)
         if not user:
             return RedirectResponse(url=f"{frontend_login}?error=user_failed")
 
@@ -168,7 +168,8 @@ async def microsoft_callback(
             expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         )
 
-        response = RedirectResponse(url=frontend_dashboard)
+        sso_param = "sso=registered" if is_new_user else "sso=login"
+        response = RedirectResponse(url=f"{frontend_dashboard}?{sso_param}")
         response.set_cookie(  # NOSONAR
             key="access_token",
             value=access_token,

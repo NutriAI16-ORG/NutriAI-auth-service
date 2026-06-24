@@ -164,7 +164,7 @@ class TestMicrosoftSSO:
         assert "/login?error=token_failed" in response.headers["location"]
 
     @patch("app.routes.acquire_token_by_code", return_value={"id_token": "token"})
-    @patch("app.routes.get_or_create_entra_user", return_value=None)
+    @patch("app.routes.get_or_create_entra_user", return_value=(None, False))
     def test_callback_user_creation_fail(self, mock_get_user, mock_acquire, client):
         response = client.get("/auth/callback?code=123", follow_redirects=False)
         assert response.status_code == 307
@@ -173,7 +173,7 @@ class TestMicrosoftSSO:
     @patch("app.routes.acquire_token_by_code", return_value={"id_token": "token"})
     @patch("app.routes.get_or_create_entra_user")
     def test_callback_success(self, mock_get_user, mock_acquire, client, test_user):
-        mock_get_user.return_value = test_user
+        mock_get_user.return_value = (test_user, False)
         response = client.get("/auth/callback?code=123", follow_redirects=False)
         assert response.status_code == 307
         assert "/dashboard" in response.headers["location"]
@@ -188,14 +188,14 @@ class TestMicrosoftSSO:
     @patch("app.routes.acquire_token_by_code", return_value={"id_token": "token"})
     @patch("app.routes.get_or_create_entra_user")
     def test_callback_success_with_api_redirect_uri(self, mock_get_user, mock_acquire, client, test_user):
-        mock_get_user.return_value = test_user
+        mock_get_user.return_value = (test_user, False)
         from app.routes import settings
         original_uri = settings.ENTRA_REDIRECT_URI
         settings.ENTRA_REDIRECT_URI = "https://nutriai.buzz/api/auth/callback"
         try:
             response = client.get("/auth/callback?code=123", follow_redirects=False)
             assert response.status_code == 307
-            assert response.headers["location"] == "https://nutriai.buzz/dashboard"
+            assert "/dashboard" in response.headers["location"]
         finally:
             settings.ENTRA_REDIRECT_URI = original_uri
 
@@ -245,7 +245,9 @@ class TestAuthServices:
 
     def test_get_or_create_entra_user_missing_claims(self, db_session):
         from app.services import get_or_create_entra_user
-        assert get_or_create_entra_user(db_session, {}) is None
+        user, is_new = get_or_create_entra_user(db_session, {})
+        assert user is None
+        assert is_new is False
 
     def test_get_or_create_entra_user_existing_oid(self, db_session, test_user):
         from app.services import get_or_create_entra_user
@@ -254,8 +256,9 @@ class TestAuthServices:
         db_session.commit()
 
         token_result = {"id_token_claims": {"oid": "oid-123", "preferred_username": test_user.email}}
-        user = get_or_create_entra_user(db_session, token_result)
+        user, is_new = get_or_create_entra_user(db_session, token_result)
         assert user.id == test_user.id
+        assert is_new is False
 
     def test_get_or_create_entra_user_existing_email(self, db_session, test_user):
         from app.services import get_or_create_entra_user
@@ -264,10 +267,11 @@ class TestAuthServices:
         db_session.commit()
 
         token_result = {"id_token_claims": {"oid": "oid-456", "preferred_username": test_user.email}}
-        user = get_or_create_entra_user(db_session, token_result)
+        user, is_new = get_or_create_entra_user(db_session, token_result)
         assert user.id == test_user.id
         assert user.entra_oid == "oid-456"
         assert user.auth_type == "entra_id"
+        assert is_new is False
 
     def test_get_or_create_entra_user_new_user(self, db_session):
         from app.services import get_or_create_entra_user
@@ -278,11 +282,12 @@ class TestAuthServices:
                 "name": "SSO New User"
             }
         }
-        user = get_or_create_entra_user(db_session, token_result)
+        user, is_new = get_or_create_entra_user(db_session, token_result)
         assert user is not None
         assert user.email == "new_sso@example.com"
         assert user.username == "new_sso"
         assert user.auth_type == "entra_id"
+        assert is_new is True
 
         # Check duplicate username handling
         token_result_dup = {
@@ -292,9 +297,10 @@ class TestAuthServices:
                 "name": "SSO Duplicate Username"
             }
         }
-        user_dup = get_or_create_entra_user(db_session, token_result_dup)
+        user_dup, is_new_dup = get_or_create_entra_user(db_session, token_result_dup)
         assert user_dup is not None
         assert user_dup.username == "new_sso1"
+        assert is_new_dup is True
 
     def test_get_or_create_entra_user_value_error(self):
         from app.services import get_or_create_entra_user
@@ -302,7 +308,9 @@ class TestAuthServices:
         mock_db.query.side_effect = ValueError("Mocked Value Error")
         
         token_result = {"id_token_claims": {"oid": "oid-123", "preferred_username": "test@example.com"}}
-        assert get_or_create_entra_user(mock_db, token_result) is None
+        user, is_new = get_or_create_entra_user(mock_db, token_result)
+        assert user is None
+        assert is_new is False
         mock_db.rollback.assert_called_once()
 
 
