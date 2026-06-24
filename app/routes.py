@@ -143,8 +143,6 @@ async def microsoft_callback(
     base_url = f"{parsed_uri.scheme}://{parsed_uri.netloc}"
     if "localhost:8000" in base_url:
         base_url = "http://localhost:5173"
-    elif base_url.endswith("/api"):
-        base_url = base_url[:-4]
     
     frontend_login = f"{base_url.rstrip('/')}/login"
     frontend_dashboard = f"{base_url.rstrip('/')}/dashboard"
