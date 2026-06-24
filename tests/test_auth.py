@@ -185,6 +185,20 @@ class TestMicrosoftSSO:
         assert response.status_code == 307
         assert "/login?error=sso_failed" in response.headers["location"]
 
+    @patch("app.routes.acquire_token_by_code", return_value={"id_token": "token"})
+    @patch("app.routes.get_or_create_entra_user")
+    def test_callback_success_with_api_redirect_uri(self, mock_get_user, mock_acquire, client, test_user):
+        mock_get_user.return_value = test_user
+        from app.routes import settings
+        original_uri = settings.ENTRA_REDIRECT_URI
+        settings.ENTRA_REDIRECT_URI = "https://nutriai.buzz/api/auth/callback"
+        try:
+            response = client.get("/auth/callback?code=123", follow_redirects=False)
+            assert response.status_code == 307
+            assert response.headers["location"] == "https://nutriai.buzz/dashboard"
+        finally:
+            settings.ENTRA_REDIRECT_URI = original_uri
+
 
 class TestAuthServices:
     def test_decode_access_token_invalid(self):
@@ -281,4 +295,14 @@ class TestAuthServices:
         user_dup = get_or_create_entra_user(db_session, token_result_dup)
         assert user_dup is not None
         assert user_dup.username == "new_sso1"
+
+    def test_get_or_create_entra_user_value_error(self):
+        from app.services import get_or_create_entra_user
+        mock_db = MagicMock()
+        mock_db.query.side_effect = ValueError("Mocked Value Error")
+        
+        token_result = {"id_token_claims": {"oid": "oid-123", "preferred_username": "test@example.com"}}
+        assert get_or_create_entra_user(mock_db, token_result) is None
+        mock_db.rollback.assert_called_once()
+
 
