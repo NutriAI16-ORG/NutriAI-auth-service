@@ -101,12 +101,14 @@ def create_user(
 
 # Microsoft Entra ID SSO
 def get_msal_app() -> msal.ConfidentialClientApplication:
-    authority = f"https://login.microsoftonline.com/{settings.ENTRA_TENANT_ID}"
+    # Use 'common' authority to support multitenant and personal Microsoft accounts
+    authority = "https://login.microsoftonline.com/common"
     return msal.ConfidentialClientApplication(
         client_id=settings.ENTRA_CLIENT_ID,
         client_credential=settings.ENTRA_CLIENT_SECRET,
         authority=authority,
     )
+
 
 
 def get_auth_url() -> str:

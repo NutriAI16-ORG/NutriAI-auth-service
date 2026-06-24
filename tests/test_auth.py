@@ -146,42 +146,44 @@ class TestMicrosoftSSO:
         response = client.get("/auth/microsoft")
         assert response.status_code == 500
 
+
     def test_callback_with_error(self, client):
-        response = client.get("/auth/callback?error=access_denied")
-        assert response.status_code == 400
-        assert "SSO authentication denied" in response.json()["error"]
+        response = client.get("/auth/callback?error=access_denied", follow_redirects=False)
+        assert response.status_code == 307
+        assert "/login?error=sso_denied" in response.headers["location"]
 
     def test_callback_missing_code(self, client):
-        response = client.get("/auth/callback")
-        assert response.status_code == 400
-        assert "No authorization code" in response.json()["error"]
+        response = client.get("/auth/callback", follow_redirects=False)
+        assert response.status_code == 307
+        assert "/login?error=missing_code" in response.headers["location"]
 
     @patch("app.routes.acquire_token_by_code", return_value=None)
     def test_callback_token_fail(self, mock_acquire, client):
-        response = client.get("/auth/callback?code=123")
-        assert response.status_code == 400
-        assert "Token acquisition failed" in response.json()["error"]
+        response = client.get("/auth/callback?code=123", follow_redirects=False)
+        assert response.status_code == 307
+        assert "/login?error=token_failed" in response.headers["location"]
 
     @patch("app.routes.acquire_token_by_code", return_value={"id_token": "token"})
     @patch("app.routes.get_or_create_entra_user", return_value=None)
     def test_callback_user_creation_fail(self, mock_get_user, mock_acquire, client):
-        response = client.get("/auth/callback?code=123")
-        assert response.status_code == 400
-        assert "User creation failed" in response.json()["error"]
+        response = client.get("/auth/callback?code=123", follow_redirects=False)
+        assert response.status_code == 307
+        assert "/login?error=user_failed" in response.headers["location"]
 
     @patch("app.routes.acquire_token_by_code", return_value={"id_token": "token"})
     @patch("app.routes.get_or_create_entra_user")
     def test_callback_success(self, mock_get_user, mock_acquire, client, test_user):
         mock_get_user.return_value = test_user
-        response = client.get("/auth/callback?code=123")
-        assert response.status_code == 200
-        assert "SSO login successful" in response.json()["message"]
+        response = client.get("/auth/callback?code=123", follow_redirects=False)
+        assert response.status_code == 307
+        assert "/dashboard" in response.headers["location"]
         assert "access_token" in response.cookies
 
     @patch("app.routes.acquire_token_by_code", side_effect=OSError("Network failure"))
     def test_callback_exception(self, mock_acquire, client):
-        response = client.get("/auth/callback?code=123")
-        assert response.status_code == 500
+        response = client.get("/auth/callback?code=123", follow_redirects=False)
+        assert response.status_code == 307
+        assert "/login?error=sso_failed" in response.headers["location"]
 
 
 class TestAuthServices:

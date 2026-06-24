@@ -138,31 +138,39 @@ async def microsoft_callback(
     error: str = None,
     db: Session = Depends(get_db),
 ):
+    from urllib.parse import urlparse
+    parsed_uri = urlparse(settings.ENTRA_REDIRECT_URI)
+    base_url = f"{parsed_uri.scheme}://{parsed_uri.netloc}"
+    if "localhost:8000" in base_url:
+        base_url = "http://localhost:5173"
+    elif base_url.endswith("/api"):
+        base_url = base_url[:-4]
+    
+    frontend_login = f"{base_url.rstrip('/')}/login"
+    frontend_dashboard = f"{base_url.rstrip('/')}/dashboard"
+
     if error:
         logger.error(f"Entra ID callback error: {error}")
-        return JSONResponse(status_code=400, content={"error": "SSO authentication denied"})
+        return RedirectResponse(url=f"{frontend_login}?error=sso_denied")
 
     if not code:
-        return JSONResponse(status_code=400, content={"error": "No authorization code received"})
+        return RedirectResponse(url=f"{frontend_login}?error=missing_code")
 
     try:
         token_result = acquire_token_by_code(code)
         if not token_result:
-            return JSONResponse(status_code=400, content={"error": "Token acquisition failed"})
+            return RedirectResponse(url=f"{frontend_login}?error=token_failed")
 
         user = get_or_create_entra_user(db, token_result)
         if not user:
-            return JSONResponse(status_code=400, content={"error": "User creation failed"})
+            return RedirectResponse(url=f"{frontend_login}?error=user_failed")
 
         access_token = create_access_token(
             data={"sub": str(user.id), "role": user.role},
             expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         )
 
-        response = JSONResponse(content={
-            "message": "SSO login successful",
-            "user": UserResponse.from_orm(user).model_dump(mode="json"),
-        })
+        response = RedirectResponse(url=frontend_dashboard)
         response.set_cookie(  # NOSONAR
             key="access_token",
             value=access_token,
@@ -175,7 +183,7 @@ async def microsoft_callback(
 
     except (SQLAlchemyError, ValueError, OSError) as e:
         logger.error(f"Error in Microsoft callback: {e}")
-        return JSONResponse(status_code=500, content={"error": "SSO callback failed"})
+        return RedirectResponse(url=f"{frontend_login}?error=sso_failed")
 
 
 @router.get("/logout")
