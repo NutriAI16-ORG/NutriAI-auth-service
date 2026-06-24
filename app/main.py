@@ -26,6 +26,45 @@ async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables verified.")
+        
+        # Seed admin user
+        from app.database import SessionLocal
+        from app.models import User, PatientProfile
+        from app.services import hash_password
+        
+        db = SessionLocal()
+        try:
+            admin_user = db.query(User).filter(User.email == "admin@nutriai-health.com").first()
+            if not admin_user:
+                logger.info("Seeding admin user data...")
+                admin_user = User(
+                    email="admin@nutriai-health.com",
+                    username="admin",
+                    hashed_password=hash_password("Password123!"),
+                    full_name="Admin User",
+                    role="admin",
+                    auth_type="local",
+                    is_active=True
+                )
+                db.add(admin_user)
+                db.flush()
+                
+                profile = PatientProfile(
+                    user_id=admin_user.id,
+                    medical_conditions=[],
+                    dietary_preferences=[],
+                )
+                db.add(profile)
+                db.commit()
+                logger.info("Admin user data seeded successfully.")
+            else:
+                logger.info("Admin user already exists. Skipping seeding.")
+        except Exception as seed_err:
+            logger.error(f"Error seeding admin user data: {seed_err}")
+            db.rollback()
+        finally:
+            db.close()
+            
     except SQLAlchemyError as e:
         logger.warning(f"Database table creation check encountered an error (tables may already exist): {e}")
     yield
